@@ -1,0 +1,8 @@
+{
+  "zone": null,
+  "userId": null,
+  "appName": "string-web-access",
+  "audience": null,
+  "moduleTypeIds": { "action": null, "search": null },
+  "customFunctionsEnabled": false
+}
