@@ -2,7 +2,7 @@
 
 Native Make connector source for the [String Web Access API](https://portal.usestring.ai/docs/api-reference/overview). Make runs the exported IML/JSON sections and calls the existing API. No separate backend is required; JavaScript runs during the local build and in Make's custom IML functions.
 
-**Status:** source preparation. This app has not been uploaded, tested in Make, submitted for review, or published. A local build does not prove Make runtime behavior. See [release requirements](#release-path-and-remaining-gates) before installing it.
+**Status:** connector source and private-app setup tooling. This app has not been uploaded, tested in Make, submitted for review, or published. A local build does not prove Make runtime behavior. See [release requirements](#release-path-and-remaining-gates) before installing it.
 
 ## Build and validate
 
@@ -25,6 +25,34 @@ Validation uses pinned Make editor schemas, with two compatibility settings: non
 Create a String API key in the String portal. In the Make app's connection dialog, choose **String API Key** and paste it into **API Key**. The password field masks the key. Connection validation calls `GET https://request.usestring.ai/v1/contexts?limit=1`, a credit-free endpoint that does not fetch a third-party page. Zero-balance, invalid-key and revoked-key behavior still need verification in Make.
 
 Each String API request adds the key as an Authorization header; the base does not, so the robots.txt request below never carries it. API redirects are disabled, and request authorization headers and bodies are sanitized in logs. Destination headers in Send a Request to a URL are separate from the String key.
+
+## Create the private development app
+
+The management scripts use the pinned `@makehq/sdk` 1.12.0. They run locally, outside the Make app runtime. The default command is offline and needs no account:
+
+```sh
+bun run make:plan
+```
+
+For a live setup, sign in to the intended Make account and provide a Make API token through your approved environment as `MAKE_API_KEY`, with its exact zone hostname in `MAKE_ZONE` (for example `us1.make.com`). Do not pass the token as an argument, put it in configuration, or paste it into an issue. The token needs `sdk-apps:read` and `sdk-apps:write`, plus access to the identity endpoints. A String API key is a separate credential used later in a Make test connection.
+
+Run `bun run make:inventory` to read the current user ID, token scopes and existing app names/versions. It makes no writes. Its output contains account identifiers; keep it out of public reports. A failed inventory is an error, not an empty workspace.
+
+Copy `make.config.example.json` to the ignored `make.config.json`. Set the zone, inventoried user ID, chosen app name, and the audience and action/search module type IDs verified for this Make account. Null values are deliberate: the uploader never guesses these creation settings. Leave `customFunctionsEnabled` false until Make has enabled custom IML functions for the app.
+
+```sh
+bun run make:upload
+```
+
+This creates a private app, verifies its visibility, uploads the Base, and creates and uploads the API-key connection. It then stops for custom IML enablement. Request enablement for that app through Make's helpdesk. After enablement, set `customFunctionsEnabled` true and resume:
+
+```sh
+bun run make:upload --resume
+```
+
+The resume uploads both robots helpers before creating the six modules. It binds each module to the returned connection identifier and compares every uploaded section with a fresh readback. Successful completion reports the remote app/version and component bindings; it does not prove that a scenario works. These scripts never publish the app, submit a review, create a runtime connection, run a scenario, or call the String API.
+
+The ignored `.make/` directory contains a private upload journal, prior section text and an exclusive upload lock. Keep it with the working copy until setup is complete. Re-running without `--resume` refuses an existing journal. A changed source or target, unexpected component, or remote section change stops the upload. The script disables automatic retries. If a creation response is lost or incomplete, inspect Make and reconcile that operation before continuing; deleting the journal and trying again can create duplicates. A section whose write response was lost can resume only when its readback exactly matches the intended source. After an interrupted process, verify it is no longer running before removing its stale lock. Nothing is deleted or rolled back automatically.
 
 ## Modules
 
@@ -66,13 +94,11 @@ Keep approval separate from any scenario retry loop. A successful approval follo
 
 ## Release path and remaining gates
 
-Before any upload, inventory the owner's existing app, version, connections and modules. Reconcile this proposed app name and local module identifiers with that inventory. The generated manifest is a local artifact, not an SDK creation payload or proof that remote IDs exist.
-
-The current vendor workflow uses `@makehq/sdk` (verified baseline 1.8.1, Node 20+) with a Make API key and zone. No uploader or Make credential is included here. After the target is known, add a target-specific upload/readback command using the SDK's exact installed contracts. Bind each module to the existing API-key connection and compare every remote section against the generated hashes. Do not replace connection metadata or create a duplicate app blindly.
+Start with a new private development app through the setup workflow above. Inventory the account first to avoid creating a duplicate. If an existing app is found, inspect its complete components and sections and prepare a separate update plan: this uploader does not adopt existing apps or replace their connection metadata. The generated manifest is a local artifact, not proof that remote IDs exist.
 
 Outstanding work before installation/publication:
 
-- Obtain the intended workspace/app, manage-custom-app permission, and a separate test team.
+- Obtain the intended Make account, custom-app permissions, and a separate test team; create and upload the private app.
 - Ask Make's helpdesk to enable custom IML functions for the app, then upload `robotsUrl` and `robotsAllowed` before the modules that call them. In Make, confirm that a 5xx or 429 `robots.txt` reaches the module's `valid` check rather than the base API error message, and that redirects are followed.
 - Reconcile the Map job-ID workflow with the intended native URL-to-map experience and Make review requirements. This increment leaves quote/approval explicit to avoid retrying a paid job creation.
 - Run every module in Make; cover valid/invalid/revoked and zero-balance connections, Markdown/JSON, extraction fallback, destination errors, search limits/empty and partial results, and sitemap pagination across more than 100 URLs. Preserve scenario links, exact source revision and fresh logs.
@@ -86,6 +112,7 @@ Once a remote app exists, record its zone/name/version and component bindings in
 ## References
 
 - [Make AI coding-agent workflow](https://developers.make.com/custom-apps-documentation/get-started/make-apps-editor/ai-coding-agent)
+- [Make TypeScript SDK](https://github.com/integromat/make-typescript-sdk)
 - [Make review prerequisites](https://developers.make.com/custom-apps-documentation/app-review/prerequisites)
 - [Pinned editor schema provenance and license](vendor/make_editor_schemas/README.md)
 - [String API reference](https://portal.usestring.ai/docs/api-reference/overview)
